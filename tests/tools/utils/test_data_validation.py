@@ -1,7 +1,9 @@
 """Unit tests for the data_validation utilities."""
 
 import pytest
+
 from app.tools.utils.data_validation import MetricsValidator, validate_host_metrics
+
 
 def test_impossible_percentages():
     """Test that percentages over 100 are flagged as impossible."""
