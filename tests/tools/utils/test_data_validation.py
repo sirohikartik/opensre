@@ -1,5 +1,6 @@
 """Unit tests for the data_validation utilities."""
 
+import pytest
 from app.tools.utils.data_validation import MetricsValidator, validate_host_metrics
 
 def test_impossible_percentages():
@@ -53,10 +54,11 @@ def test_byte_to_gb_and_mb_inference():
     assert interpretation_mb["likely_unit"] == "bytes"
     assert interpretation_mb["likely_value_mb"] == 500.0
 
-def test_flat_metric_payload():
-    """Test validation on flat API response structures."""
+def test_class_flat_metric_payload():
+    """Test class validation on flat API response structures."""
     payload = {"cpu": 95, "ram": 8589934592, "disk": 50}
-    result = validate_host_metrics(payload)
+    validator = MetricsValidator()
+    result = validator.validate_metrics(payload)
 
     # Ram should be flagged as invalid and inferred as 8 GB
     assert result["ram_invalid"] is True
@@ -67,11 +69,10 @@ def test_flat_metric_payload():
     assert "data_quality_issues" in result
     assert result["data_quality_issues"][0]["field"] == "ram"
 
-def test_flat_metric_payload():
-    """Test validation on flat API response structures."""
+def test_wrapper_flat_metric_payload():
+    """Test wrapper validation on flat API response structures."""
     payload = {"cpu": 95, "ram": 8589934592, "disk": 50}
-    validator = MetricsValidator()
-    result = validator.validate_metrics(payload)
+    result = validate_host_metrics(payload)
 
     # Ram should be flagged as invalid and inferred as 8 GB
     assert result["ram_invalid"] is True
@@ -95,8 +96,8 @@ def test_nested_metric_payload():
     assert "percent_interpretation" in result["memory"]
     assert result["data_quality_issues"][0]["field"] == "memory.percent"
 
-def test_list_structure_payload():
-    """Test validation on list-based API response structures."""
+def test_class_list_structure_payload():
+    """Test class validation on list-based API response structures."""
     payload = {
         "success": True,
         "data": [
@@ -119,9 +120,23 @@ def test_list_structure_payload():
     assert len(result["data_quality_issues"]) == 1
     assert result["data_quality_issues"][0]["field"] == "ram"
 
+@pytest.mark.xfail(reason="Known bug: wrapper fails to attach data_quality_issues for lists")
+def test_wrapper_list_structure_payload():
+    """Test wrapper validation on lists (Currently expected to fail due to bug)."""
+    payload = {
+        "success": True,
+        "data": [
+            {"cpu": 95, "ram": 8589934592, "disk": 50},
+            {"cpu": 10, "ram": 45, "disk": 20}
+        ]
+    }
+    result = validate_host_metrics(payload)
+
+    # This assertion WILL fail because of the bug, but xfail tells pytest we expect it to!
+    assert "data_quality_issues" in result
+
 def test_invalid_format():
     """Test fallback when metrics is not a dictionary."""
-    from app.tools.utils.data_validation import validate_host_metrics
     result = validate_host_metrics("this is just a string, not a dict")
     assert result["validated"] is False
     assert result["data_quality_issues"][0]["issue"] == "invalid_format"
